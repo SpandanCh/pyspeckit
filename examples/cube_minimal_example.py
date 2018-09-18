@@ -4,11 +4,14 @@ import matplotlib.pylab as plt
 import numpy as np
 
 # generate a test spectral cube (10x10, with a 100 spectral channels)
-make_test_cube((100,10,10), outfile='test.fits')
-spc = pyspeckit.Cube('test.fits')
+#make_test_cube((100,10,10), outfile='test.fits')
+spc = pyspeckit.Cube('../../NGC1333_NH3_11_subcube.fits')
 
 # do a crude noise estimate on the 30 edge channels
 rmsmap = np.vstack([spc.cube[:15], spc.cube[85:]]).std(axis=0)
+
+# give convention for changing frequency to velocity
+spc.xarr.velocity_convention='radio'
 
 # get a cube of moments
 spc.momenteach(vheight=False)
@@ -19,8 +22,9 @@ spc.fiteach(fittype = 'gaussian',
             errmap = rmsmap,
             signal_cut = 3, # ignore pixels with SNR<3
             blank_value = np.nan,
-            start_from_point=(5,5))
+            start_from_point=(0,0))
 spc.mapplot()
 # show the fitted amplitude
 spc.show_fit_param(0, cmap='viridis')
+
 plt.show()

@@ -1,16 +1,12 @@
 """
 Fit NH3 Cube
 ============
-
 Example script to fit all pixels in an NH3 data cube.
-
 This is a bit of a mess, and fairly complicated (intrinsically),
 but if you have matched 1-1 + 2-2 + ... NH3 cubes, you should be
 able to modify this example and get something useful out.
-
 .. WARNING:: Cube fitting, particularly with a complicated line profile
 ammonia, can take a long time.  Test this on a small cube first!
-
 .. TODO:: Turn this example script into a function.  But customizing 
     the fit parameters will still require digging into the data manually
     (e.g., excluding bad velocities, or excluding the hyperfine lines from
@@ -35,32 +31,37 @@ F=False; T=True
 fitcube = True
 
 # Mask out low S/N pixels (to speed things up)
-mask = pyfits.getdata('hotclump_11_mask.fits')
-mask = np.isfinite(mask) * (mask > 0)
+#mask = pyfits.getdata('')
+#mask = np.isfinite(mask) * (mask > 0)
 
 # Load the data using a mask
 # Then calibrate the data (the data we're loading in this case are in Janskys,
 # but we want surface brightness in Kelvin for the fitting process)
-cube11 = pyspeckit.Cube('hotclump_11.cube_r0.5_rerun.image.fits', maskmap=mask)
-cube11.cube *= (13.6 * (300.0 /
-    (pyspeckit.spectrum.models.ammonia.freq_dict['oneone']/1e9))**2 *
-    1./cube11.header.get('BMAJ')/3600. * 1./cube11.header.get('BMIN')/3600. )
-cube11.unit = "K"
-cube22 = pyspeckit.Cube('hotclump_22.cube_r0.5_contsub.image.fits', maskmap=mask)
-cube22.cube *= (13.6 * (300.0 /
-        (pyspeckit.spectrum.models.ammonia.freq_dict['twotwo']/1e9))**2 *
-        1./cube22.header.get('BMAJ')/3600. * 1./cube22.header.get('BMIN')/3600. )
-cube22.unit = "K"
-cube44 = pyspeckit.Cube('hotclump_44.cube_r0.5_contsub.image.fits', maskmap=mask)
+cube11 = pyspeckit.Cube('../../NGC1333_NH3_11_subcube.fits')
+#cube11.cube *= (13.6 * (300.0 /
+#    (pyspeckit.spectrum.models.ammonia.freq_dict['oneone']/1e9))**2 *
+#    1./cube11.header.get('BMAJ')/3600. * 1./cube11.header.get('BMIN')/3600. )
+#cube11.unit = "K"
+
+
+cube22 = pyspeckit.Cube('../../NGC1333_NH3_22_subcube.fits')
+#cube22.cube *= (13.6 * (300.0 /
+#        (pyspeckit.spectrum.models.ammonia.freq_dict['twotwo']/1e9))**2 *
+#        1./cube22.header.get('BMAJ')/3600. * 1./cube22.header.get('BMIN')/3600. )
+#cube22.unit = "K"
+
+'''cube44 = pyspeckit.Cube('hotclump_44.cube_r0.5_contsub.image.fits', maskmap=mask)
 cube44.cube *= (13.6 * (300.0 /
         (pyspeckit.spectrum.models.ammonia.freq_dict['fourfour']/1e9))**2 *
         1./cube44.header.get('BMAJ')/3600. * 1./cube44.header.get('BMIN')/3600. )
 cube44.unit = "K"
-
+'''
 # Compute an error map.  We use the 1-1 errors for all 3 because they're
 # essentially the same, but you could use a different error map for each
 # frequency
+'''
 oneonemomentfn = 'hotclump_11.cube_r0.5_rerun.image.moment_linefree.fits'
+
 errmap11 = (pyfits.getdata(oneonemomentfn).squeeze() * 13.6 *
             (300.0 /
              (pyspeckit.spectrum.models.ammonia.freq_dict['oneone']/1e9))**2
@@ -70,17 +71,32 @@ errmap11 = (pyfits.getdata(oneonemomentfn).squeeze() * 13.6 *
 errmap11[errmap11 != errmap11] = convolve_fft(errmap11,
                                               Gaussian2DKernel(3),
                                               interpolate_nan=True)[errmap11 != errmap11]
+'''
+
+
+errmap11 = np.vstack([cube11.cube[:50], cube11.cube[875:]]).std(axis=0)
+
+#cube11.xarr.velocity_convention = 'radio'
+#cube22.xarr.velocity_convention = 'radio'
+
+#errmap11 = cube11.slice(0,30, unit='km/s').cube.std(axis=0)
+
+
+errmap11[errmap11 != errmap11] = convolve_fft(errmap11, Gaussian2DKernel(3), nan_treatment='fill')[errmap11 != errmap11]
+
+# 'interpolate_nan' deprecated. use 'nan_treatment'. 
+
 
 # Stack the cubes into one big cube.  The X-axis is no longer linear: there
 # will be jumps from 1-1 to 2-2 to 4-4.  
-cubes = pyspeckit.CubeStack([cube11,cube22,cube44], maskmap=mask)
+cubes = pyspeckit.CubeStack([cube11,cube22])
 cubes.unit = "K"
 
 # Make a "moment map" to contain the initial guesses
 # If you've already fit the cube, just re-load the saved version
 # otherwise, re-fit it
-if os.path.exists('hot_momentcube.fits'):
-    momentcubefile = pyfits.open('hot_momentcube.fits')
+if os.path.exists('nh3_momentcube.fits'):
+    momentcubefile = pyfits.open('nh3_momentcube.fits')
     momentcube = momentcubefile[0].data
 else:
     cube11.mapplot()
@@ -89,14 +105,16 @@ else:
     momentcube = cube11.momentcube
     momentcubefile = pyfits.PrimaryHDU(data=momentcube, header=cube11.header)
 if astropy.version.major >= 2 or (astropy.version.major==1 and astropy.version.minor>=3):
-    momentcubefile.writeto('hot_momentcube.fits',overwrite=True)
+    momentcubefile.writeto('nh3_momentcube.fits',overwrite=True)
 else:
-    momentcubefile.writeto('hot_momentcube.fits',clobber=True)
+    momentcubefile.writeto('nh3_momentcube.fits',clobber=True)
+    
 
 # Create a "guess cube".  Because we're fitting physical parameters in this
 # case, we want to make the initial guesses somewhat reasonable
 # As above, we'll just reload the saved version if it exists
-guessfn = 'hot_guesscube.fits'
+
+guessfn = 'nh3_guesscube.fits'
 if os.path.exists(guessfn):
     guesscube = pyfits.open(guessfn)
     guesses = guesscube[0].data
@@ -116,65 +134,65 @@ else:
         guesscube.writeto(guessfn, clobber=True)
 
 # This bit doesn't need to be in an if statment
-if fitcube:
+#if fitcube:
     # excise guesses that fall out of the "good" range
-    guesses[4,:,:][guesses[4,:,:] > 100] = 100.0
-    guesses[4,:,:][guesses[4,:,:] < 91] = 95
+guesses[4,:,:][guesses[4,:,:] > 10] = 7.5
+guesses[4,:,:][guesses[4,:,:] < 5] = 7.5
 
-    # do the fits
-    # signal_cut means ignore any pixel with peak S/N less than this number
-    # In this fit, many of the parameters are limited
-    # start_from_point selects the pixel coordinates to start from
-    # use_nearest_as_guess says that, at each pixel, the input guesses will be
-    # set by the fitted parameters from the nearest pixel with a good fit
-    # HOWEVER, because this fitting is done in parallel (multicore=12 means
-    # 12 parallel fitting processes will run), this actually means that EACH
-    # core will have its own sub-set of the cube that it will search for good 
-    # fits. So if you REALLY want consistency, you need to do the fit in serial.
-    cubes.fiteach(fittype='ammonia', multifit=None, guesses=guesses,
-            integral=False, verbose_level=3, fixed=[F,F,F,F,F,T], signal_cut=3,
-            limitedmax=[F,F,F,F,T,T],
-            maxpars=[0,0,0,0,101,1],
-            limitedmin=[T,T,F,F,T,T],
-            minpars=[2.73,2.73,0,0,91,0],
-            use_nearest_as_guess=True, start_from_point=(94,250),
-            multicore=12,
-            errmap=errmap11)
+# do the fits
+# signal_cut means ignore any pixel with peak S/N less than this number
+# In this fit, many of the parameters are limited
+# start_from_point selects the pixel coordinates to start from
+# use_nearest_as_guess says that, at each pixel, the input guesses will be
+# set by the fitted parameters from the nearest pixel with a good fit
+# HOWEVER, because this fitting is done in parallel (multicore=12 means
+# 12 parallel fitting processes will run), this actually means that EACH
+# core will have its own sub-set of the cube that it will search for good 
+# fits. So if you REALLY want consistency, you need to do the fit in serial.
+cubes.fiteach(fittype='ammonia', multifit=None, guesses=guesses,
+    integral=False, verbose_level=3, fixed=[F,F,F,F,F,T], signal_cut=3,
+    limitedmax=[F,F,T,T,T,T],
+    maxpars=[0,0,18,3,11,1],
+    limitedmin=[T,T,T,T,T,T],
+    minpars=[2.73,2.73,10,0.07,4,0],
+    use_nearest_as_guess=True, start_from_point=(7,7),
+    multicore=1, errmap=errmap11)
 
-    # Save the fitted parameters in a data cube
-    fitcubefile = pyfits.PrimaryHDU(data=np.concatenate([cubes.parcube,cubes.errcube]), header=cubes.header)
-    fitcubefile.header.update('PLANE1','TKIN')
-    fitcubefile.header.update('PLANE2','TEX')
-    fitcubefile.header.update('PLANE3','COLUMN')
-    fitcubefile.header.update('PLANE4','SIGMA')
-    fitcubefile.header.update('PLANE5','VELOCITY')
-    fitcubefile.header.update('PLANE6','FORTHO')
-    fitcubefile.header.update('PLANE7','eTKIN')
-    fitcubefile.header.update('PLANE8','eTEX')
-    fitcubefile.header.update('PLANE9','eCOLUMN')
-    fitcubefile.header.update('PLANE10','eSIGMA')
-    fitcubefile.header.update('PLANE11','eVELOCITY')
-    fitcubefile.header.update('PLANE12','eFORTHO')
-    fitcubefile.header.update('CDELT3',1)
-    fitcubefile.header.update('CTYPE3','FITPAR')
-    fitcubefile.header.update('CRVAL3',0)
-    fitcubefile.header.update('CRPIX3',1)
-    fitcubefile.writeto("hot_fitcube_try6.fits")
-else: # you can read in a fit you've already done!
-    cubes.load_model_fit('hot_fitcube_try6.fits', 6, 'ammonia', _temp_fit_loc=(94,250))
-    cubes.specfit.parinfo[5]['fixed'] = True
+# Save the fitted parameters in a data cube
+fitcubefile = pyfits.PrimaryHDU(data=np.concatenate([cubes.parcube,cubes.errcube]), header=cubes.header)
+fitcubefile.header.update({'PLANE1':'TKIN'})
+fitcubefile.header.update({'PLANE2':'TEX'})
+fitcubefile.header.update({'PLANE3':'COLUMN'})
+fitcubefile.header.update({'PLANE4':'SIGMA'})
+fitcubefile.header.update({'PLANE5':'VELOCITY'})
+fitcubefile.header.update({'PLANE6':'FORTHO'})
+fitcubefile.header.update({'PLANE7':'eTKIN'})
+fitcubefile.header.update({'PLANE8':'eTEX'})
+fitcubefile.header.update({'PLANE9':'eCOLUMN'})
+fitcubefile.header.update({'PLANE10':'eSIGMA'})
+fitcubefile.header.update({'PLANE11':'eVELOCITY'})
+fitcubefile.header.update({'PLANE12':'eFORTHO'})
+fitcubefile.header.update({'CDELT3':1})
+fitcubefile.header.update({'CTYPE3':'FITPAR'})
+fitcubefile.header.update({'CRVAL3':0})
+fitcubefile.header.update({'CRPIX3':1})
+fitcubefile.writeto("nh3_fitcube_try1.fits", overwrite=True)
+#else: # you can read in a fit you've already done!
+#    cubes.load_model_fit('nh3_fitcube_try1.fits', 6, 'ammonia', _temp_fit_loc=(7,7))
+#    cubes.specfit.parinfo[5]['fixed'] = True
 
 
 # Now do some plotting things
 import pylab as pl
+pl.ion()
 
 # Set the map-to-plot to be the line centroid
 cubes.mapplot.plane = cubes.parcube[4,:,:]
-cubes.mapplot(estimator=None,vmin=91,vmax=101)
+cubes.mapplot(estimator=None,vmin=4,vmax=11)
 
 # Set the reference frequency to be the 1-1 line frequency
 cubes.xarr.refX = pyspeckit.spectrum.models.ammonia.freq_dict['oneone']
-cubes.xarr.refX_unit='Hz'
+cubes.xarr.refX_unit='GHz'
 
 # If you wanted to view the spectra in velocity units, use this:
 #cubes.xarr.convert_to_unit('km/s')
@@ -187,10 +205,12 @@ cubes.xarr.refX_unit='Hz'
 
 cubes.plot_special = pyspeckit.wrappers.fitnh3.plotter_override
 cubes.plot_special_kwargs = {'fignum':3, 'vrange':[55,135]}
-cubes.plot_spectrum(160,99)
+
+cubes.xarr.velocity_convention = 'radio'
+
+cubes.plot_spectrum(11,14)
 
 # make interactive
-pl.ion()
 pl.show()
 
 # At this point, you can click on any pixel in the image and see the spectrum
