@@ -8,7 +8,10 @@ For details on the various plotting tools, please see the `examples` and the
 `plotter documentation <pyspeckit.spectrum.plotters.Plotter>`.
 
 A few basic examples are shown in the snippet below, with comments describing
-the various steps:
+the various steps.  This example (https://github.com/jmangum/spectrumplot)
+shows how to use pyspeckit with `spectral_cube
+<https://spectral-cube.readthedocs.io/en/latest/index.html>`_
+to extract and label spectra.  Other examples:
 
 
 .. literalinclude:: basic_plot.py
@@ -68,3 +71,13 @@ Basic plot example with a second spectrum offset and overlaid in red, again with
         :alt: Basic plot example with a second spectrum offset and overlaid in red, again with adjusted limits
         :figwidth: 800
         :width: 800
+
+
+
+API Documentation for Plotting
+------------------------------
+
+We include the API documentation for the generic model and fitter wrappers here.
+
+.. automodule:: pyspeckit.spectrum.plotters
+    :members:

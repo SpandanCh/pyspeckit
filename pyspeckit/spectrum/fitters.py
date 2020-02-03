@@ -7,8 +7,8 @@ import warnings
 
 from astropy import log
 from astropy import units as u
-from astropy.extern.six.moves import xrange
-from astropy.extern.six import string_types
+from six.moves import xrange
+from six import string_types
 
 from ..config import mycfg
 from ..config import ConfigDescriptor as cfgdec
@@ -472,9 +472,9 @@ class Specfit(interactive.Interactive):
                 midpt       = self.Spectrum.xarr[midpt_pixel].value
             elif midpt_location == 'fitted':
                 try:
-                    shifts = [self.Spectrum.specfit.parinfo[x].value
-                              for x in self.Spectrum.specfit.parinfo.keys()
-                              if 'SHIFT' in x]
+                    shifts = np.array([self.Spectrum.specfit.parinfo[x].value
+                                       for x in self.Spectrum.specfit.parinfo.keys()
+                                       if 'SHIFT' in x])
                 except AttributeError:
                     raise AttributeError("Can only specify midpt_location="
                                          "fitted if there is a SHIFT parameter"
@@ -995,7 +995,8 @@ class Specfit(interactive.Interactive):
         for par in self.parinfo:
             if par.scaleable:
                 par.value = par.value * scalefactor
-                par.error = par.error * scalefactor
+                if par.error is not None:
+                    par.error = par.error * scalefactor
 
         if self.Spectrum.plotter.axis is not None and plot:
             if color is not None:
@@ -1360,14 +1361,21 @@ class Specfit(interactive.Interactive):
                 self._annotation_labels.append(chi2_label)
 
         if self.Spectrum.plotter.axis:
-            self.fitleg = self.Spectrum.plotter.axis.legend(
-                tuple([pl]*len(self._annotation_labels)),
-                self._annotation_labels, loc=loc, markerscale=markerscale,
-                borderpad=borderpad, handlelength=handlelength,
-                handletextpad=handletextpad, labelspacing=labelspacing,
-                frameon=frameon, fontsize=fontsize, **kwargs)
-            self.Spectrum.plotter.axis.add_artist(self.fitleg)
-            self.fitleg.draggable(True)
+            try:
+                self.fitleg = self.Spectrum.plotter.axis.legend(
+                    tuple([pl]*len(self._annotation_labels)),
+                    self._annotation_labels, loc=loc, markerscale=markerscale,
+                    borderpad=borderpad, handlelength=handlelength,
+                    handletextpad=handletextpad, labelspacing=labelspacing,
+                    frameon=frameon, fontsize=fontsize, **kwargs)
+                self.Spectrum.plotter.axis.add_artist(self.fitleg)
+            except TypeError as ex:
+                print("Error {0} was raised, which may indicate an outdated mpl version".format(ex))
+            try:
+                self.fitleg.set_draggable(True)
+            except AttributeError:
+                # wrong version and/or non-interactive backend
+                pass
             if self.Spectrum.plotter.autorefresh:
                 self.Spectrum.plotter.refresh()
 
